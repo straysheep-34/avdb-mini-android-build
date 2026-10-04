@@ -87,7 +87,7 @@ public final class MainActivity extends Activity {
             @Override
             public void onFullScreen(GeckoSession s, boolean fullScreen) {
                 htmlFullscreen = fullScreen;
-                applyImmersiveMode(fullScreen);
+                setImmersiveMode(fullScreen);
             }
 
             @Override
