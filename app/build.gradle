@@ -4,12 +4,22 @@ plugins {
 
 android {
     namespace 'com.avdbmini.android'
-    compileSdk 36
+
+    compileSdk {
+        version = release(37) {
+            minorApiLevel = 1
+        }
+    }
 
     defaultConfig {
         applicationId 'com.avdbmini.android'
+
+        // Android 8.0+
         minSdk 26
+
+        // 暂时维持 36，不影响使用 compileSdk 37.1
         targetSdk 36
+
         versionCode 200
         versionName '2.0-gecko'
     }
@@ -23,8 +33,13 @@ android {
         jniLibs {
             useLegacyPackaging = true
         }
+
         resources {
-            excludes += ['META-INF/DEPENDENCIES', 'META-INF/LICENSE*', 'META-INF/NOTICE*']
+            excludes += [
+                'META-INF/DEPENDENCIES',
+                'META-INF/LICENSE*',
+                'META-INF/NOTICE*'
+            ]
         }
     }
 }
