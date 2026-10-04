@@ -3,13 +3,14 @@
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application
-        android:name=".AVDBApplication"
         android:allowBackup="false"
         android:hardwareAccelerated="true"
         android:usesCleartextTraffic="true"
+        android:extractNativeLibs="true"
         android:largeHeap="true"
         android:label="AVDB Mini"
         android:theme="@style/AppTheme">
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
