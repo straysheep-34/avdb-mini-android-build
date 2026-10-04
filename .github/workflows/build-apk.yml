@@ -10,39 +10,53 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Java 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK
+      - name: Install Android SDK packages
         run: |
-          sdkmanager "platforms;android-36" "build-tools;36.0.0"
           yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-36" "build-tools;36.0.0" "platform-tools"
+          sdkmanager --list_installed
 
-      - name: Set up Gradle
+      - name: Set up Gradle 9.5
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.5.0'
 
-      - name: Build APK
-        run: gradle :app:assembleDebug --stacktrace
+      - name: Show environment
+        run: |
+          java -version
+          gradle -v
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ls "$ANDROID_HOME/platforms"
+          ls "$ANDROID_HOME/build-tools"
 
-      - name: Copy APK
+      - name: Build APK
+        run: |
+          gradle :app:assembleDebug --stacktrace --info
+
+      - name: Prepare APK
         run: |
           mkdir -p output
-          cp app/build/outputs/apk/debug/app-debug.apk output/AVDB-Mini-Android-Gecko.apk
+          cp app/build/outputs/apk/debug/app-debug.apk \
+             output/AVDB-Mini-Android-Gecko.apk
+          ls -lh output/
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: AVDB-Mini-Android-Gecko
           path: output/AVDB-Mini-Android-Gecko.apk
+          if-no-files-found: error
