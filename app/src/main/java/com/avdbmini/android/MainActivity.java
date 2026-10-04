@@ -87,7 +87,7 @@ public final class MainActivity extends Activity {
             @Override
             public void onFullScreen(GeckoSession s, boolean fullScreen) {
                 htmlFullscreen = fullScreen;
-                setImmersive(fullScreen);
+                applyImmersiveMode(fullScreen);
             }
 
             @Override
@@ -102,7 +102,7 @@ public final class MainActivity extends Activity {
         });
     }
 
-    private void setImmersive(boolean enabled) {
+    private void setImmersiveMode(boolean enabled) {
         Window window = getWindow();
         if (android.os.Build.VERSION.SDK_INT >= 30) {
             WindowInsetsController c = window.getInsetsController();
