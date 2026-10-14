@@ -199,14 +199,6 @@ public final class MainActivity extends Activity {
             session.exitFullScreen();
             return;
         }
-        if (session != null) {
-            try {
-                if (session.canGoBack()) {
-                    session.goBack();
-                    return;
-                }
-            } catch (Throwable ignored) {}
-        }
         super.onBackPressed();
     }
 
