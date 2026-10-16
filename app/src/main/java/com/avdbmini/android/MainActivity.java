@@ -3,6 +3,9 @@ package com.avdbmini.android;
 import android.app.Activity;
 import android.graphics.Color;
 import android.os.Bundle;
+import android.os.Build;
+import android.window.OnBackInvokedCallback;
+import android.window.OnBackInvokedDispatcher;
 import android.util.Log;
 import android.view.View;
 import android.view.Window;
@@ -29,10 +32,18 @@ public final class MainActivity extends Activity {
     private String localOrigin;
     private boolean htmlFullscreen;
     private boolean recoveryAttempted;
+    private boolean canGoBack;
+    private OnBackInvokedCallback systemBackCallback;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        if (Build.VERSION.SDK_INT >= 33) {
+            systemBackCallback = this::handleBack;
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                    OnBackInvokedDispatcher.PRIORITY_DEFAULT, systemBackCallback);
+        }
 
         Window window = getWindow();
         window.setStatusBarColor(Color.rgb(9, 11, 16));
@@ -58,6 +69,8 @@ public final class MainActivity extends Activity {
     }
 
     private void createSessionAndLoad() {
+        canGoBack = false;
+        htmlFullscreen = false;
         GeckoSession newSession = new GeckoSession();
         installDelegates(newSession);
         newSession.open(sRuntime);
@@ -68,6 +81,11 @@ public final class MainActivity extends Activity {
 
     private void installDelegates(GeckoSession targetSession) {
         targetSession.setNavigationDelegate(new GeckoSession.NavigationDelegate() {
+            @Override
+            public void onCanGoBack(GeckoSession s, boolean value) {
+                if (s == session) canGoBack = value;
+            }
+
             @Override
             public GeckoResult<AllowOrDeny> onLoadRequest(
                     GeckoSession s, NavigationDelegate.LoadRequest request) {
@@ -195,15 +213,27 @@ public final class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
+        handleBack();
+    }
+
+    private void handleBack() {
         if (htmlFullscreen && session != null) {
             session.exitFullScreen();
             return;
         }
-        super.onBackPressed();
+        if (session != null && canGoBack) {
+            session.goBack();
+            return;
+        }
+        moveTaskToBack(true);
     }
 
     @Override
     protected void onDestroy() {
+        if (Build.VERSION.SDK_INT >= 33 && systemBackCallback != null) {
+            getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(systemBackCallback);
+            systemBackCallback = null;
+        }
         if (geckoView != null) {
             try { geckoView.releaseSession(); } catch (Throwable ignored) {}
         }
@@ -218,3 +248,4 @@ public final class MainActivity extends Activity {
         super.onDestroy();
     }
 }
+
