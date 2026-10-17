@@ -102,16 +102,16 @@ final class MiniServer implements Closeable {
             if (!"GET".equals(method)) {
                 String origin = headers.get("origin");
                 if (origin != null && !origin.equals("http://127.0.0.1:" + server.getLocalPort())) {
-                    writeError(out,403,"鏉ユ簮鏃犳晥"); return;
+                    writeError(out,403,"来源无效"); return;
                 }
-                if (headers.containsKey("transfer-encoding")) { writeError(out,400,"涓嶆敮鎸佸垎鍧楄姹?"); return; }
+                if (headers.containsKey("transfer-encoding")) { writeError(out,400,"不支持分块请求"); return; }
                 int length = intValue(headers.get("content-length"),-1);
-                if (length < 0 || length > 3 * 1024 * 1024) { writeError(out,400,"璇锋眰澶у皬鏃犳晥"); return; }
+                if (length < 0 || length > 3 * 1024 * 1024) { writeError(out,400,"请求大小无效"); return; }
                 byte[] body = new byte[length];
                 int offset = 0;
-                while (offset < length) { int n = rawIn.read(body,offset,length-offset); if(n < 0) throw new Exception("璇锋眰浣撲笉瀹屾暣"); offset += n; }
+                while (offset < length) { int n = rawIn.read(body,offset,length-offset); if(n < 0) throw new Exception("请求体不完整"); offset += n; }
                 try { payload = new JSONObject(new String(body,StandardCharsets.UTF_8)); }
-                catch (Exception e) { writeError(out,400,"JSON鏍煎紡鏃犳晥"); return; }
+                catch (Exception e) { writeError(out,400,"JSON格式无效"); return; }
             }
 
             String target = parts[1];
@@ -123,8 +123,8 @@ final class MiniServer implements Closeable {
                 if ("/api/favorites".equals(path)) {
                     if ("GET".equals(method)) { synchronized(dataLock) { writeJson(out,200,dataStore().getString("favorites","{\"folders\":[]}")); } }
                     else if ("PUT".equals(method)) {
-                        if (payload.optJSONArray("folders") == null) throw new Exception("鏀惰棌鏍煎紡鏃犳晥");
-                        synchronized(dataLock) { if(!dataStore().edit().putString("favorites",payload.toString()).commit()) throw new Exception("鏀惰棌淇濆瓨澶辫触"); }
+                        if (payload.optJSONArray("folders") == null) throw new Exception("收藏格式无效");
+                        synchronized(dataLock) { if(!dataStore().edit().putString("favorites",payload.toString()).commit()) throw new Exception("收藏保存失败"); }
                         writeJson(out,200,"{\"ok\":true}");
                     } else writeError(out,405,"method not allowed");
                     return;
@@ -133,7 +133,7 @@ final class MiniServer implements Closeable {
                 if ("/api/actor-cover".equals(path) && "GET".equals(method)) { writeJson(out,200,pickActorCover(q.get("actor"),q.get("movieId")).toString()); return; }
                 if ("/api/actor-cover-image".equals(path) && "GET".equals(method)) {
                     CoverToken cover = coverTokens.get(q.getOrDefault("token",""));
-                    if (cover == null || System.currentTimeMillis()-cover.created > 1800000) throw new Exception("灏侀潰宸茶繃鏈燂紝璇锋崲涓?寮?");
+                    if (cover == null || System.currentTimeMillis()-cover.created > 1800000) throw new Exception("封面已过期，请换一张");
                     RemoteData image = remote(cover.url,true,0);
                     write(out,200,image.type,image.body); return;
                 }
@@ -144,7 +144,7 @@ final class MiniServer implements Closeable {
                     else writeError(out,405,"method not allowed");
                     return;
                 }
-            } catch (Exception e) { writeError(out,502,e.getMessage()==null?"璇锋眰澶辫触":e.getMessage()); return; }
+            } catch (Exception e) { writeError(out,502,e.getMessage()==null?"请求失败":e.getMessage()); return; }
             if (!"GET".equals(method)) { writeError(out,405,"method not allowed"); return; }
             if ("/".equals(path)) {
                 write(out, 200, "text/html; charset=utf-8", indexBytes);
@@ -152,7 +152,7 @@ final class MiniServer implements Closeable {
                 writeJson(out, 200, new JSONObject().put("ok", true).put("version", VERSION).put("engine", "GeckoView").toString());
             } else if ("/api/browse".equals(path)) {
                 int t = clamp(intValue(q.get("t"), 0), 0, 7);
-                if (t < 1) { writeError(out, 400, "鏃犳晥鍒嗙被"); return; }
+                if (t < 1) { writeError(out, 400, "无效分类"); return; }
                 LinkedHashMap<String,String> p = new LinkedHashMap<>();
                 p.put("ac", "detail"); p.put("t", String.valueOf(t));
                 p.put("pg", String.valueOf(clamp(intValue(q.get("pg"),1),1,100000)));
@@ -161,7 +161,7 @@ final class MiniServer implements Closeable {
                 proxy(out, q, p);
             } else if ("/api/search".equals(path)) {
                 String text = trim(q.get("q"));
-                if (text.isEmpty() || text.length() > 120) { writeError(out,400,"璇疯緭鍏ョ暘鍙枫?佹爣棰樻垨婕斿憳鍏抽敭璇?"); return; }
+                if (text.isEmpty() || text.length() > 120) { writeError(out,400,"请输入番号、标题或演员关键词"); return; }
                 LinkedHashMap<String,String> p = new LinkedHashMap<>();
                 p.put("ac", "detail");
                 String field = trim(q.get("field"));
@@ -173,7 +173,7 @@ final class MiniServer implements Closeable {
                 proxy(out, q, p);
             } else if ("/api/tag".equals(path)) {
                 String tag=trim(q.get("category"));
-                if(tag.isEmpty() || tag.length()>120) { writeError(out,400,"鏍囩鏃犳晥"); return; }
+                if(tag.isEmpty() || tag.length()>120) { writeError(out,400,"标签无效"); return; }
                 LinkedHashMap<String,String> p = new LinkedHashMap<>();
                 p.put("ac","detail"); p.put("category",tag);
                 p.put("pg",String.valueOf(clamp(intValue(q.get("pg"),1),1,100000)));
@@ -182,7 +182,7 @@ final class MiniServer implements Closeable {
                 proxy(out,q,p);
             } else if ("/api/detail".equals(path)) {
                 String id = trim(q.get("id"));
-                if (!id.matches("\\d+")) { writeError(out,400,"鏃犳晥褰辩墖 ID"); return; }
+                if (!id.matches("\\d+")) { writeError(out,400,"无效影片 ID"); return; }
                 LinkedHashMap<String,String> p = new LinkedHashMap<>();
                 p.put("ac", "detail"); p.put("ids", id);
                 proxy(out, q, p);
@@ -201,7 +201,7 @@ final class MiniServer implements Closeable {
             }
             write(out, 200, "application/json; charset=utf-8", body.getBytes(StandardCharsets.UTF_8));
         } catch (Exception e) {
-            try { writeError(out, 502, "鏃犳硶杩炴帴 AVDB API锛?" + e.getMessage()); } catch (Exception ignored) {}
+            try { writeError(out, 502, "无法连接 AVDB API：" + e.getMessage()); } catch (Exception ignored) {}
         }
     }
 
@@ -258,7 +258,7 @@ final class MiniServer implements Closeable {
     }
 
     private static String validActor(String value) throws Exception {
-        String name=trim(value); if(name.isEmpty() || name.length()>120)throw new Exception("婕斿憳濮撳悕鏃犳晥"); return name;
+        String name=trim(value); if(name.isEmpty() || name.length()>120)throw new Exception("演员姓名无效"); return name;
     }
     private static String actorKey(String value) { return java.text.Normalizer.normalize(value,java.text.Normalizer.Form.NFKC).toLowerCase(Locale.ROOT); }
     private JSONObject readActor(String name) throws Exception {
@@ -270,7 +270,7 @@ final class MiniServer implements Closeable {
             JSONObject record=all.optJSONObject(actorKey(name)); if(record==null)record=new JSONObject();
             java.util.Iterator<String> keys=changes.keys();while(keys.hasNext()){String key=keys.next();record.put(key,changes.get(key));}
             record.put("name",name);all.put(actorKey(name),record);
-            if(!dataStore().edit().putString("actors",all.toString()).commit())throw new Exception("婕斿憳鏁版嵁淇濆瓨澶辫触");
+            if(!dataStore().edit().putString("actors",all.toString()).commit())throw new Exception("演员数据保存失败");
             return new JSONObject(record.toString());
         }
     }
@@ -280,40 +280,40 @@ final class MiniServer implements Closeable {
         try {
             LinkedHashMap<String,String> p=new LinkedHashMap<>();p.put("ac","detail");p.put("actor",name);p.put("pg","1");p.put("pagesize","1");
             JSONObject data=new JSONObject(fetchAvdb(true,p));double total=data.optDouble("total",Double.NaN);
-            if(!data.has("total")||data.isNull("total")||data.optString("total").trim().isEmpty()||Double.isNaN(total)||Double.isInfinite(total)||total<0)throw new Exception("API鏈繑鍥炴湁鏁堜綔鍝佹?绘暟");
+            if(!data.has("total")||data.isNull("total")||data.optString("total").trim().isEmpty()||Double.isNaN(total)||Double.isInfinite(total)||total<0)throw new Exception("API未返回有效作品总数");
             return updateActor(name,new JSONObject().put("total",(long)total).put("countUpdated",System.currentTimeMillis()));
-        } catch(Exception e) { record.put("name",name);record.put("countError",e.getMessage()==null?"鏁伴噺鏌ヨ澶辫触":e.getMessage());return record; }
+        } catch(Exception e) { record.put("name",name);record.put("countError",e.getMessage()==null?"数量查询失败":e.getMessage());return record; }
     }
     private JSONObject saveActorCrop(String value,String image) throws Exception {
         String name=validActor(value);String prefix="data:image/png;base64,";
-        if(image==null||!image.startsWith(prefix)||image.length()>2800000)throw new Exception("澶村儚鏍煎紡鏃犳晥");
+        if(image==null||!image.startsWith(prefix)||image.length()>2800000)throw new Exception("头像格式无效");
         byte[] bytes=Base64.decode(image.substring(prefix.length()),Base64.DEFAULT);
         BitmapFactory.Options options=new BitmapFactory.Options();options.inJustDecodeBounds=true;BitmapFactory.decodeByteArray(bytes,0,bytes.length,options);
-        if(options.outWidth!=384 || options.outHeight!=512 || !"image/png".equals(options.outMimeType))throw new Exception("澶村儚蹇呴』涓?384脳512 PNG");
+        if(options.outWidth!=384 || options.outHeight!=512 || !"image/png".equals(options.outMimeType))throw new Exception("头像必须为384×512 PNG");
         return updateActor(name,new JSONObject().put("image",image).put("source","manual-cover-crop"));
     }
     private JSONObject pickActorCover(String value,String preferred) throws Exception {
         String name=validActor(value);LinkedHashMap<String,String> p=new LinkedHashMap<>();p.put("ac","detail");p.put("actor",name);p.put("pg","1");p.put("pagesize","1");
         boolean usePreferred=preferred!=null&&!preferred.isEmpty();
-        if(usePreferred){if(!preferred.matches("\\d+"))throw new Exception("褰辩墖ID鏃犳晥");p.put("ids",preferred);}
+        if(usePreferred){if(!preferred.matches("\\d+"))throw new Exception("影片ID无效");p.put("ids",preferred);}
         JSONObject data=new JSONObject(fetchAvdb(true,p));
         int pages=clamp(data.optInt("pagecount",data.optInt("total",1)),1,100000);
         int page=usePreferred?1:random.nextInt(pages)+1;
         if(page>1){p.put("pg",String.valueOf(page));data=new JSONObject(fetchAvdb(true,p));}
         JSONArray list=data.optJSONArray("list");JSONObject movie=list==null?null:list.optJSONObject(0);
-        if(movie==null)throw new Exception("娌℃湁鍙敤鐨勬紨鍛樺皝闈?");
-        if(usePreferred){boolean found=false;Object raw=movie.opt("actor");JSONArray names=raw instanceof JSONArray?(JSONArray)raw:new JSONArray().put(raw);for(int i=0;i<names.length();i++){for(String part:names.optString(i).split("[,锛屻??;锛沑\n\\r]|\\s+/\\s+")){if(actorKey(trim(part)).equals(actorKey(name)))found=true;}}if(!found)throw new Exception("婕斿憳涓嶅尮閰嶏紝璇锋崲涓?寮?");}
+        if(movie==null)throw new Exception("没有可用的演员封面");
+        if(usePreferred){boolean found=false;Object raw=movie.opt("actor");JSONArray names=raw instanceof JSONArray?(JSONArray)raw:new JSONArray().put(raw);for(int i=0;i<names.length();i++){for(String part:names.optString(i).split("[,，、;；\\n\\r]|\\s+/\\s+")){if(actorKey(trim(part)).equals(actorKey(name)))found=true;}}if(!found)throw new Exception("演员不匹配，请换一张");}
         String image=movie.optString("poster_url");if(image.isEmpty())image=movie.optString("thumb_url");URL source=validHttps(image);
         long now=System.currentTimeMillis();for(Map.Entry<String,CoverToken> entry:coverTokens.entrySet())if(now-entry.getValue().created>1800000)coverTokens.remove(entry.getKey());
         if(coverTokens.size()>=100){java.util.Iterator<String> it=coverTokens.keySet().iterator();if(it.hasNext())coverTokens.remove(it.next());}
         String token=UUID.randomUUID().toString();coverTokens.put(token,new CoverToken(source.toString()));
-        return new JSONObject().put("image","/api/actor-cover-image?token="+token).put("title",movie.optString("name",movie.optString("movie_code","褰辩墖灏侀潰"))).put("movieId",movie.opt("id"));
+        return new JSONObject().put("image","/api/actor-cover-image?token="+token).put("title",movie.optString("name",movie.optString("movie_code","影片封面"))).put("movieId",movie.opt("id"));
     }
     private static URL validHttps(String value) throws Exception {
-        URL url=new URL(value);if(!"https".equalsIgnoreCase(url.getProtocol())||url.getUserInfo()!=null)throw new Exception("鍙敮鎸丠TTPS鍥剧墖");return url;
+        URL url=new URL(value);if(!"https".equalsIgnoreCase(url.getProtocol())||url.getUserInfo()!=null)throw new Exception("只支持HTTPS图片");return url;
     }
     private static URL validProfile(String value) throws Exception {
-        URL url=validHttps(value);if(!"cn.javd.me".equalsIgnoreCase(url.getHost())||url.getPort()!=-1||!url.getPath().matches("/actors/\\d+/"))throw new Exception("璇峰～鍐檆n.javd.me鐨勬暟瀛楁紨鍛樹富椤甸摼鎺?");return url;
+        URL url=validHttps(value);if(!"cn.javd.me".equalsIgnoreCase(url.getHost())||url.getPort()!=-1||!url.getPath().matches("/actors/\\d+/"))throw new Exception("请填写cn.javd.me的数字演员主页链接");return url;
     }
     private static final class RemoteData {
         final byte[] body;final String type;
@@ -324,12 +324,12 @@ final class MiniServer implements Closeable {
         HttpURLConnection c=(HttpURLConnection)url.openConnection();c.setConnectTimeout(15000);c.setReadTimeout(22000);c.setInstanceFollowRedirects(false);c.setRequestProperty("User-Agent","AVDB-Mini-Android/"+VERSION);
         try {
             int status=c.getResponseCode();
-            if(status>=300&&status<400){if(redirects>=3)throw new Exception("閲嶅畾鍚戣繃澶?");String location=c.getHeaderField("Location");if(location==null)throw new Exception("閲嶅畾鍚戝湴鍧?缂哄け");return remote(new URL(url,location).toString(),image,redirects+1);}
-            if(status!=200)throw new Exception("杩滅▼鍥剧墖鎴栭〉闈TTP "+status);
+            if(status>=300&&status<400){if(redirects>=3)throw new Exception("重定向过多");String location=c.getHeaderField("Location");if(location==null)throw new Exception("重定向地址缺失");return remote(new URL(url,location).toString(),image,redirects+1);}
+            if(status!=200)throw new Exception("远程图片或页面HTTP "+status);
             String type=c.getContentType();if(type==null)type="";type=type.split(";")[0].trim().toLowerCase(Locale.ROOT);
-            if(image&&!type.matches("image/(jpeg|png|webp|avif|gif)"))throw new Exception("杩滅▼鍦板潃涓嶆槸鍙鍙栧浘鐗?");
+            if(image&&!type.matches("image/(jpeg|png|webp|avif|gif)"))throw new Exception("远程地址不是可读取图片");
             int limit=image?12*1024*1024:2*1024*1024;
-            try(InputStream in=c.getInputStream();ByteArrayOutputStream bytes=new ByteArrayOutputStream()){byte[] buffer=new byte[16384];int n;while((n=in.read(buffer))!=-1){if(bytes.size()+n>limit)throw new Exception("杩滅▼鍐呭杩囧ぇ");bytes.write(buffer,0,n);}return new RemoteData(bytes.toByteArray(),type);}
+            try(InputStream in=c.getInputStream();ByteArrayOutputStream bytes=new ByteArrayOutputStream()){byte[] buffer=new byte[16384];int n;while((n=in.read(buffer))!=-1){if(bytes.size()+n>limit)throw new Exception("远程内容过大");bytes.write(buffer,0,n);}return new RemoteData(bytes.toByteArray(),type);}
         } finally {c.disconnect();}
     }
     private static String htmlText(String value){return value.replace("&quot;","\"").replace("&#39;","'").replace("&apos;","'").replace("&amp;","&").replace("&lt;","<").replace("&gt;",">");}
@@ -338,8 +338,8 @@ final class MiniServer implements Closeable {
         Matcher tags=Pattern.compile("<meta\\b[^>]*>",Pattern.CASE_INSENSITIVE).matcher(html);
         Pattern attr=Pattern.compile("([\\w:-]+)\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|([^\\s>]+))");
         while(tags.find()){Map<String,String> attrs=new LinkedHashMap<>();Matcher m=attr.matcher(tags.group());while(m.find()){String v=m.group(2)!=null?m.group(2):m.group(3)!=null?m.group(3):m.group(4);attrs.put(m.group(1).toLowerCase(Locale.ROOT),htmlText(v));}String key=attrs.containsKey("property")?attrs.get("property"):attrs.get("name");if(key!=null&&attrs.containsKey("content"))meta.put(key.toLowerCase(Locale.ROOT),attrs.get("content"));}
-        String image=meta.get("og:image");if(image==null)image=meta.get("twitter:image");if(image==null)throw new Exception("鏈壘鍒板叕寮?澶村儚鍏冩暟鎹紝鍙互鏀圭敤灏侀潰瑁佸壀");
-        URL target=validHttps(new URL(url,image).toString());return new JSONObject().put("image",target.toString()).put("title",meta.containsKey("og:title")?meta.get("og:title"):"婕斿憳涓婚〉").put("source",url.toString());
+        String image=meta.get("og:image");if(image==null)image=meta.get("twitter:image");if(image==null)throw new Exception("未找到公开头像元数据，可以改用封面裁剪");
+        URL target=validHttps(new URL(url,image).toString());return new JSONObject().put("image",target.toString()).put("title",meta.containsKey("og:title")?meta.get("og:title"):"演员主页").put("source",url.toString());
     }
     private JSONObject saveActorProfile(JSONObject payload) throws Exception {
         String name=validActor(payload.optString("actor"));String source=validProfile(payload.optString("source")).toString();String image=validHttps(payload.optString("image")).toString();
